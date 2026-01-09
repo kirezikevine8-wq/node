@@ -29,4 +29,13 @@ pool.getPaymentsByUser = async (userId) => {
   return pool.query(q, [userId]);
 };
 
+// Helper: get collections (created_collection) by user_id
+pool.getCollectionsByUser = async (userId) => {
+  const q = `SELECT id, collection_center_id, user_id, quantity, quality, created_at
+             FROM created_collection
+             WHERE user_id = $1
+             ORDER BY created_at DESC`;
+  return pool.query(q, [userId]);
+};
+
 module.exports = pool;

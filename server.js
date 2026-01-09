@@ -28,6 +28,12 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
+// Expose raw OpenAPI JSON for debugging/inspection
+app.get('/swagger.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerDocs);
+});
+
 // ---------------- Simple test route ----------------
 app.get('/hello', (req, res) => res.send('Hello World'));
 
@@ -44,24 +50,25 @@ app.get('/hello', (req, res) => res.send('Hello World'));
  *         name: farmerId
  *         required: true
  *         schema:
- *           type: integer
- *         description: Farmer ID
+ *           type: string
+ *           format: uuid
+ *         description: Farmer ID (UUID)
  *     responses:
  *       200:
- *         description: Payment info retrieved successfully
+ *         description: Payment info retrieved successfully (each payment includes its quantity)
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 quantity:
- *                   type: string
- *                   example: "120.50"
  *                 payments:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
+ *                       quantity:
+ *                         type: string
+ *                         example: "12.50"
  *                       amount:
  *                         type: string
  *                         example: "30000.00"
@@ -76,76 +83,73 @@ app.get('/api/payment-page/:farmerId', async (req, res) => {
   try {
     const farmerId = req.params.farmerId;
 
-    const milkResult = await pool.query(
-      `SELECT COALESCE(SUM(quantity_liters), 0) AS quantity
-       FROM milk_collections
-       WHERE farmer_id = $1`,
-      [farmerId]
-    );
-
+    // Return each payment (including its `quantity`) from the `payments` table
     const paymentResult = await pool.query(
-      `SELECT amount, payment_method, created_at
+      `SELECT quantity, amount, payment_method, created_at
        FROM payments
        WHERE farmer_id = $1
        ORDER BY created_at DESC`,
       [farmerId]
     );
 
-    res.json({
-      quantity: milkResult.rows[0].quantity,
-      payments: paymentResult.rows
-    });
+    res.json({ payments: paymentResult.rows });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+// `/api/payments/user/:user_id` endpoint removed per request
+
 /**
  * @swagger
- * /api/payments/user/{user_id}:
+ * /api/collections/user/{user_id}:
  *   get:
- *     summary: Retrieve payments for a user by user_id
+ *     summary: Retrieve collections (created_collection) for a user by user_id
  *     tags:
- *       - Payments
+ *       - Collections
  *     parameters:
  *       - in: path
  *         name: user_id
  *         required: true
  *         schema:
- *           type: integer
- *         description: User ID
+ *           type: string
+ *           format: uuid
+ *         description: User ID (UUID)
  *     responses:
  *       200:
- *         description: List of payments for the user
+ *         description: List of collections for the user
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 payments:
+ *                 collections:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
  *                       id:
- *                         type: integer
- *                       user_id:
- *                         type: integer
- *                       farmer_id:
- *                         type: integer
- *                       amount:
  *                         type: string
- *                       payment_method:
+ *                         format: uuid
+ *                       collection_center_id:
+ *                         type: string
+ *                         format: uuid
+ *                       user_id:
+ *                         type: string
+ *                         format: uuid
+ *                       quantity:
+ *                         type: string
+ *                       quality:
  *                         type: string
  *                       created_at:
  *                         type: string
  */
-app.get('/api/payments/user/:user_id', async (req, res) => {
+app.get('/api/collections/user/:user_id', async (req, res) => {
   try {
     const userId = req.params.user_id;
-    const result = await pool.getPaymentsByUser(userId);
-    res.json({ payments: result.rows });
+    const result = await pool.getCollectionsByUser(userId);
+    res.json({ collections: result.rows });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
