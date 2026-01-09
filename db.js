@@ -6,9 +6,8 @@ const pool = new Pool({
   database: 'sanhub',       // your database name
   password: '0d7WYAyHXtSO8mZguqrN35Vh28iUfgw4',     // your password
   port: 5432,                   // default PostgreSQL port
-  ssl: {
-    rejectUnauthorized: false   // allows SSL without verifying certificate
-  }
+  ssl: { rejectUnauthorized: false }
+
 });
 
 pool.connect((err, client, release) => {
