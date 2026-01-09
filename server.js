@@ -101,6 +101,57 @@ app.get('/api/payment-page/:farmerId', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/payments/user/{user_id}:
+ *   get:
+ *     summary: Retrieve payments for a user by user_id
+ *     tags:
+ *       - Payments
+ *     parameters:
+ *       - in: path
+ *         name: user_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: List of payments for the user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 payments:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       user_id:
+ *                         type: integer
+ *                       farmer_id:
+ *                         type: integer
+ *                       amount:
+ *                         type: string
+ *                       payment_method:
+ *                         type: string
+ *                       created_at:
+ *                         type: string
+ */
+app.get('/api/payments/user/:user_id', async (req, res) => {
+  try {
+    const userId = req.params.user_id;
+    const result = await pool.getPaymentsByUser(userId);
+    res.json({ payments: result.rows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // ---------------- Start server ----------------
 const PORT = 3000;
 app.listen(PORT, () => {

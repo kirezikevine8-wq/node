@@ -20,4 +20,13 @@ pool.connect((err, client, release) => {
   }
 });
 
+// Helper: get payments by user_id
+pool.getPaymentsByUser = async (userId) => {
+  const q = `SELECT id, user_id, farmer_id, amount, payment_method, created_at
+             FROM payments
+             WHERE user_id = $1
+             ORDER BY created_at DESC`;
+  return pool.query(q, [userId]);
+};
+
 module.exports = pool;
