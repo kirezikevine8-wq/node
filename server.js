@@ -158,7 +158,22 @@ app.get('/api/payment-page/:farmerId', async (req, res) => {
 app.get('/api/collections/user/:user_id', async (req, res) => {
   try {
     const userId = req.params.user_id;
-    const result = await pool.getCollectionsByUser(userId);
+
+    // Join created_collection with collection_center to return center name & location
+    const q = `
+      SELECT
+        cc.name AS collection_center_name,
+        cc.location AS collection_center_location,
+        c.quantity::text AS quantity,
+        c.quality,
+        c.created_at
+      FROM created_collection c
+      JOIN collection_center cc ON c.collection_center_id = cc.id
+      WHERE c.user_id = $1
+      ORDER BY c.created_at DESC
+    `;
+
+    const result = await pool.query(q, [userId]);
     res.json({ collections: result.rows });
   } catch (error) {
     console.error(error);
