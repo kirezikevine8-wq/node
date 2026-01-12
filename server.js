@@ -9,8 +9,6 @@ const path = require('path');
 const app = express();
 // Enable CORS from all origins (explicit)
 app.use(cors({ origin: '*' }));
-// Respond to preflight requests for all routes
-app.options('*', cors({ origin: '*' }));
 app.use(express.json());
 
 // ---------------- Swagger setup ----------------
@@ -160,7 +158,10 @@ app.get('/api/collections/user/:user_id', async (req, res) => {
 });
 
 // ---------------- Start server ----------------
-const PORT = 3000;
+// Bind to platform-provided port or CLI flag (--port) for hosting (e.g., Render)
+const argvPortIndex = process.argv.indexOf('--port');
+const argvPort = argvPortIndex !== -1 ? process.argv[argvPortIndex + 1] : undefined;
+const PORT = process.env.PORT || argvPort || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
   console.log(`📄 Swagger docs at http://localhost:${PORT}/api-docs`);
