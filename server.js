@@ -29,7 +29,7 @@ const swaggerOptions = {
       version: "1.0.0",
       description: "API documentation for Milk Delivery Admin Panel"
     },
-    servers: [{ url: "http://localhost:3000" }]
+    // no hardcoded servers: use relative paths so Swagger works in any deployment
   },
   apis: [path.join(__dirname, "server.js")] // Absolute path ensures Swagger finds the file
 };
