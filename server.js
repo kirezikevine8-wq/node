@@ -7,54 +7,42 @@ const swaggerJsDoc = require('swagger-jsdoc');
 const path = require('path');
 
 const app = express();
-// Enable CORS from all origins (explicit)
+
+// Enable CORS and handle preflight
 app.use(cors({ origin: '*' }));
-// Ensure CORS headers and OPTIONS preflight are handled for all routes
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  // short-circuit preflight
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 app.use(express.json());
 
-// ---------------- Swagger setup ----------------
+// Swagger setup (no hardcoded server URL)
 const swaggerOptions = {
   definition: {
-    openapi: "3.0.0",
-    info: {
-      title: "Milk Delivery Admin API",
-      version: "1.0.0",
-      description: "API documentation for Milk Delivery Admin Panel"
-    },
-    // no hardcoded servers: use relative paths so Swagger works in any deployment
+    openapi: '3.0.0',
+    info: { title: 'Milk Delivery Admin API', version: '1.0.0' }
   },
-  apis: [path.join(__dirname, "server.js")] // Absolute path ensures Swagger finds the file
+  apis: [path.join(__dirname, 'server.js')]
 };
-
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
-
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// Expose raw OpenAPI JSON for debugging/inspection
 app.get('/swagger.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerDocs);
 });
 
-// ---------------- Simple test route ----------------
 app.get('/hello', (req, res) => res.send('Hello World'));
 
-// ---------------- Farmer Payment API ----------------
 /**
  * @swagger
  * /api/payment-page/{farmerId}:
  *   get:
  *     summary: Get payment info for a farmer
- *     tags:
- *       - Payments
+ *     tags: [Payments]
  *     parameters:
  *       - in: path
  *         name: farmerId
@@ -62,38 +50,13 @@ app.get('/hello', (req, res) => res.send('Hello World'));
  *         schema:
  *           type: string
  *           format: uuid
- *         description: Farmer ID (UUID)
  *     responses:
  *       200:
- *         description: Payment info retrieved successfully (each payment includes its quantity)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 payments:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       quantity:
- *                         type: string
- *                         example: "12.50"
- *                       amount:
- *                         type: string
- *                         example: "30000.00"
- *                       payment_method:
- *                         type: string
- *                         example: "Mobile Money"
- *                       created_at:
- *                         type: string
- *                         example: "2026-01-08T09:15:00.000Z"
+ *         description: payments
  */
 app.get('/api/payment-page/:farmerId', async (req, res) => {
   try {
     const farmerId = req.params.farmerId;
-
-    // Return each payment (including its `quantity`) from the `payments` table
     const paymentResult = await pool.query(
       `SELECT quantity, amount, payment_method, created_at
        FROM payments
@@ -101,7 +64,6 @@ app.get('/api/payment-page/:farmerId', async (req, res) => {
        ORDER BY created_at DESC`,
       [farmerId]
     );
-
     res.json({ payments: paymentResult.rows });
   } catch (error) {
     console.error(error);
@@ -109,15 +71,12 @@ app.get('/api/payment-page/:farmerId', async (req, res) => {
   }
 });
 
-// `/api/payments/user/:user_id` endpoint removed per request
-
 /**
  * @swagger
  * /api/collections/user/{user_id}:
  *   get:
- *     summary: Retrieve collections (created_collection) for a user by user_id
- *     tags:
- *       - Collections
+ *     summary: Retrieve collections for a user including center name and location
+ *     tags: [Collections]
  *     parameters:
  *       - in: path
  *         name: user_id
@@ -125,54 +84,21 @@ app.get('/api/payment-page/:farmerId', async (req, res) => {
  *         schema:
  *           type: string
  *           format: uuid
- *         description: User ID (UUID)
  *     responses:
  *       200:
- *         description: List of collections for the user
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 collections:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         format: uuid
- *                       collection_center_id:
- *                         type: string
- *                         format: uuid
- *                       user_id:
- *                         type: string
- *                         format: uuid
- *                       quantity:
- *                         type: string
- *                       quality:
- *                         type: string
- *                       created_at:
- *                         type: string
+ *         description: collections
  */
 app.get('/api/collections/user/:user_id', async (req, res) => {
   try {
     const userId = req.params.user_id;
-
-    // Join created_collection with collection_center to return center name & location
     const q = `
-      SELECT
-        cc.name AS collection_center_name,
-        cc.location AS collection_center_location,
-        c.quantity::text AS quantity,
-        c.quality,
-        c.created_at
+      SELECT cc.name AS collection_center_name, cc.location AS collection_center_location,
+             c.quantity::text AS quantity, c.quality, c.created_at
       FROM created_collection c
       JOIN collection_center cc ON c.collection_center_id = cc.id
       WHERE c.user_id = $1
       ORDER BY c.created_at DESC
     `;
-
     const result = await pool.query(q, [userId]);
     res.json({ collections: result.rows });
   } catch (error) {
@@ -181,8 +107,92 @@ app.get('/api/collections/user/:user_id', async (req, res) => {
   }
 });
 
-// ---------------- Start server ----------------
-// Bind to platform-provided port or CLI flag (--port) for hosting (e.g., Render)
+/**
+ * @swagger
+ * /api/user/{user_id}/summary:
+ *   get:
+ *     summary: Get today's delivery and payment summary for a user
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: user_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Brief summary with today's delivery, total payments, and last payment
+ */
+app.get('/api/user/:user_id/summary', async (req, res) => {
+  try {
+    const userId = req.params.user_id;
+
+    // ensure user exists
+    const userRes = await pool.query('SELECT id FROM register WHERE id = $1', [userId]);
+    if (userRes.rowCount === 0) return res.status(404).json({ message: 'User not found' });
+
+    // Today's delivery quantity
+    const todayRes = await pool.query(
+      `SELECT COALESCE(SUM(quantity),0) AS total FROM created_collection WHERE user_id = $1 AND created_at::date = CURRENT_DATE`,
+      [userId]
+    );
+    const todaysTotal = parseFloat(todayRes.rows[0].total) || 0;
+
+    // Total payments amount
+    const paymentsRes = await pool.query('SELECT COALESCE(SUM(amount),0) AS total_paid FROM payments WHERE farmer_id = $1', [userId]);
+    const totalPaid = parseFloat(paymentsRes.rows[0].total_paid) || 0;
+
+    // Last payment
+    const lastPaymentRes = await pool.query('SELECT amount, created_at FROM payments WHERE farmer_id = $1 ORDER BY created_at DESC LIMIT 1', [userId]);
+    const last = lastPaymentRes.rowCount ? lastPaymentRes.rows[0] : null;
+
+    res.json({
+      todays_delivery_quantity: todaysTotal.toFixed(2),
+      total_payments_amount: totalPaid.toFixed(2),
+      last_payment: last ? { amount: parseFloat(last.amount).toFixed(2), date: new Date(last.created_at).toISOString() } : null
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * Brief summary: today's delivery quantity, total payments amount, and last payment
+ */
+app.get('/api/user/:user_id/brief', async (req, res) => {
+  try {
+    const userId = req.params.user_id;
+
+    // ensure user exists
+    const userRes = await pool.query('SELECT id FROM register WHERE id = $1', [userId]);
+    if (userRes.rowCount === 0) return res.status(404).json({ message: 'User not found' });
+
+    const todayRes = await pool.query(
+      `SELECT COALESCE(SUM(quantity),0) AS total FROM created_collection WHERE user_id = $1 AND created_at::date = CURRENT_DATE`,
+      [userId]
+    );
+    const todaysTotal = parseFloat(todayRes.rows[0].total) || 0;
+
+    const paymentsRes = await pool.query('SELECT COALESCE(SUM(amount),0) AS total_paid FROM payments WHERE farmer_id = $1', [userId]);
+    const totalPaid = parseFloat(paymentsRes.rows[0].total_paid) || 0;
+
+    const lastPaymentRes = await pool.query('SELECT amount, created_at FROM payments WHERE farmer_id = $1 ORDER BY created_at DESC LIMIT 1', [userId]);
+    const last = lastPaymentRes.rowCount ? lastPaymentRes.rows[0] : null;
+
+    res.json({
+      todays_delivery_quantity: todaysTotal.toFixed(2),
+      total_payments_amount: totalPaid.toFixed(2),
+      last_payment: last ? { amount: parseFloat(last.amount).toFixed(2), date: new Date(last.created_at).toISOString() } : null
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Start server (respect process.env.PORT and --port)
 const argvPortIndex = process.argv.indexOf('--port');
 const argvPort = argvPortIndex !== -1 ? process.argv[argvPortIndex + 1] : undefined;
 const PORT = process.env.PORT || argvPort || 3000;
