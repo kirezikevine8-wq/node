@@ -7,7 +7,10 @@ const swaggerJsDoc = require('swagger-jsdoc');
 const path = require('path');
 
 const app = express();
-app.use(cors());
+// Enable CORS from all origins (explicit)
+app.use(cors({ origin: '*' }));
+// Respond to preflight requests for all routes
+app.options('*', cors({ origin: '*' }));
 app.use(express.json());
 
 // ---------------- Swagger setup ----------------
